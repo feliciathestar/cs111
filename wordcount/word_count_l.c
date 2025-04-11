@@ -27,21 +27,26 @@
 #include "word_count.h"
 
 void init_words(word_count_list_t *wclist) {
-    /* TODO */
+    list_init(wclist);
 }
 
-size_t len_words(word_count_list_t *wclist) {
-    /* TODO */
-    return 0;
+size_t len_words(word_count_list_t *wclist) { 
+    return list_size(wclist);
 }
 
 word_count_t *find_word(word_count_list_t *wclist, char *word) {
-    /* TODO */
+    struct list_elem *e;
+    for (e = list_begin(wclist); e != list_end(wclist); e = list_next(e)) {
+        word_count_t *wc = list_entry(e, word_count_t, elem); // get the word_count_t object
+        if (strcmp(wc->word, word) == 0) {
+            // if the word matches, return the word_count_t object
+            return wc;
+        }
     return NULL;
+    }
 }
 
-word_count_t *add_word_with_count(word_count_list_t *wclist, char *word,
-                                  int count) {
+word_count_t *add_word_with_count(word_count_list_t *wclist, char *word, int count) {
     /* TODO */
     return NULL;
 }
