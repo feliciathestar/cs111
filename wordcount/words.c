@@ -41,6 +41,7 @@ int main(int argc, char *argv[]) {
     init_words(&word_counts);
 
     if (argc <= 1) {
+        //If no arguments are given, it reads from standard input.
         count_words(&word_counts, stdin);
     } else {
         /* Process each file. */

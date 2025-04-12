@@ -51,19 +51,24 @@ typedef struct word_count_list {
     struct list lst;
     pthread_mutex_t lock;
 } word_count_list_t;
+
 #else /* PTHREADS */
 typedef struct list word_count_list_t;
 #endif /* PTHREADS */
 
 #else /* PINTOS_LIST */
-
 typedef struct word_count {
+    /*
+    When the PINTOS_LIST macro is not defined, the structure is defined in the “simple” way:
+    Here the intrusive aspect is clear: the “next” pointer is embedded directly in the structure
+    No separate list node is created.
+    */
     char *word;
     int count;
     struct word_count *next;
 } word_count_t;
 
-typedef word_count_t *word_count_list_t;
+typedef word_count_t *word_count_list_t; //a pointer to word_count_t, meaning that the list is represented by its head.
 #endif /* PINTOS_LIST */
 
 /* Initialize a word count list. */

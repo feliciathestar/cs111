@@ -24,11 +24,18 @@
 #include "word_count.h"
 
 void init_words(word_count_list_t *wclist) {
-    /* Initialize word count.  */
+    /* 
+    Initialize word count.  
+    Sets the list pointer to NULL, effectively creating an empty list
+    */
     *wclist = NULL;
 }
 
 size_t len_words(word_count_list_t *wclist) {
+    /*
+    Iterates over the linked list (following the embedded “next” pointers) 
+    to count and return the number of words.
+    */
     size_t len = 0;
     word_count_t *cur;
     for (cur = *wclist; cur != NULL; cur = cur->next) {
@@ -36,6 +43,9 @@ size_t len_words(word_count_list_t *wclist) {
     }
     return len;
 }
+
+
+////// Word Lookup and Updating:
 
 word_count_t *find_word(word_count_list_t *wclist, char *word) {
     /* Return count for word, if it exists. */
@@ -49,7 +59,7 @@ word_count_t *find_word(word_count_list_t *wclist, char *word) {
 word_count_t *add_word(word_count_list_t *wclist, char *word) {
     /*
      * If word is present in word_counts list, increment the count.
-     * Otherwise, insert at head of list with count 1.
+     * Otherwise, insert (using malloc) at head of list with count 1.
      */
     word_count_t *wc = find_word(wclist, word);
     if (wc != NULL) {
@@ -65,12 +75,27 @@ word_count_t *add_word(word_count_list_t *wclist, char *word) {
     return wc;
 }
 
+
+///////printing & sorting:
+
+
 void fprint_words(word_count_list_t *wclist, FILE *outfile) {
     word_count_t *wc;
     for (wc = *wclist; wc != NULL; wc = wc->next) {
         fprintf(outfile, "%8d\t%s\n", wc->count, wc->word);
     }
 }
+
+
+/*
+    insertion sort: 
+    takes each element from the unsorted list and uses a helper function (wordcount_insert_ordered) 
+    to insert it into a new list in the correct order, 
+    according to the comparator function passed as an argument. 
+    This allows the function to be used with different sorting criteria 
+    (for example, by count or by alphabetical order).
+
+*/
 
 void wordcount_insert_ordered(word_count_list_t *wclist, word_count_t *elem,
                               bool less(const word_count_t *,

@@ -87,6 +87,14 @@
      - "interior element": An element that is not the head or
        tail, that is, a real list element.  An empty list does
        not have any interior elements.
+
+
+    Using these definitions, you can think of the list as 
+    having “boundaries” (head and tail) that are not actual data but help manage the list. 
+    The “front” and “back” are the data elements you care about, 
+    and when you iterate over the list, you use these sentinels to know when to stop 
+    (for example, you iterate from list_begin() to list_end(), 
+    and once you hit the tail, you know you’re done).
 */
 
 #include <stdbool.h>
