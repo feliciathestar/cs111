@@ -53,10 +53,10 @@ typedef struct word_count_list {
 } word_count_list_t;
 
 #else /* PTHREADS */
-typedef struct list word_count_list_t;
+typedef struct list word_count_list_t; 
 #endif /* PTHREADS */
 
-#else /* PINTOS_LIST */
+#else
 typedef struct word_count {
     /*
     When the PINTOS_LIST macro is not defined, the structure is defined in the “simple” way:
@@ -69,7 +69,7 @@ typedef struct word_count {
 } word_count_t;
 
 typedef word_count_t *word_count_list_t; //a pointer to word_count_t, meaning that the list is represented by its head.
-#endif /* PINTOS_LIST */
+#endif 
 
 /* Initialize a word count list. */
 void init_words(word_count_list_t *wclist);

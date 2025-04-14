@@ -32,9 +32,33 @@
 #include "word_count.h"
 #include "word_helpers.h"
 
-/*
- * main - handle command line, spawning one thread per file.
- */
+typedef struct {
+    char *filename; //  each input FILENAME 
+    word_count_list_t *word_counts; // POINTER to the shared word count list
+}thread_args_t;
+
+/* thread routine */
+void * thread_rountine(void * arg){
+    
+    // cast arg to thread_args_t
+    thread_args_t * args = (thread_args_t *) arg;
+
+    //get file object 
+    FILE *file = fopen(args->filename, "r");
+
+    // check if file opened successfully
+    if (file == NULL) {
+        perror("Error opening file");
+        pthread_exit(NULL);
+    }
+
+    // avoid race condition because adding words to shared word_counts list
+    count_words(args->word_counts, file); 
+    fclose(file);
+    free(args);
+    pthread_exit(NULL);
+}
+
 int main(int argc, char *argv[]) {
     /* Create the empty data structure. */
     word_count_list_t word_counts;
@@ -44,10 +68,43 @@ int main(int argc, char *argv[]) {
         /* Process stdin in a single thread. */
         count_words(&word_counts, stdin);
     } else {
-        /* TODO */
+        /* 
+            Spawn a new thread per input file.
+            Pass each thread the filename and the shared word count list.   
+            Join all threads after creation.
+        */
+        // create an array of pthread_t called threads
+        pthread_t threads[argc - 1];
+
+        for (int i = 1; i < argc; i++) {
+            // allocate memory for thread_args_t
+            thread_args_t *args = malloc(sizeof(thread_args_t));
+            if (args == NULL) {
+                perror("Malloc Error for thread_args_t");
+                exit(1);
+            }
+            args->filename = argv[i]; // assign argv to filename
+            args->word_counts = &word_counts; // assign word_counts to word_counts
+
+            // create a thread to create a word_count list for each file
+            if (pthread_create(&threads[i-1], NULL, thread_rountine, args) != 0){
+                perror("Error creating thread");
+                free(args);
+                exit(1);
+            } 
+        }
+
+        // join the threads (i.e. each file's word count list)
+        for (int i = 1; i < argc; i++) {
+            if (pthread_join(threads[i-1], NULL) != 0){
+                perror("Error joining thread:");
+                exit(1);
+            }
+        }
     }
 
-    /* Output final result of all threads' work. */
+    /* Sort and print final result of all threads' work. */ 
+    // use wordcount_sort to because the joined word count list is not sorted
     wordcount_sort(&word_counts, less_count);
     fprint_words(&word_counts, stdout);
     return 0;
