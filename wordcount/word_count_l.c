@@ -46,12 +46,10 @@ word_count_t *find_word(word_count_list_t *wclist, char *word) {
 }
 
 word_count_t *add_word_with_count(word_count_list_t *wclist, char *word, int count) {
-    // check if the word is NULL
     if (word == NULL) {
         fprintf(stderr, "Error: word is NULL\n");
         return NULL;
     }
-    // check if the count is less than 0
     if (count < 0) {
         fprintf(stderr, "Error: count is less than 0\n");
         return NULL;
@@ -60,8 +58,7 @@ word_count_t *add_word_with_count(word_count_list_t *wclist, char *word, int cou
     if (wc != NULL) { 
         wc->count += count;
         return wc;
-    }else{ 
-        //if the word does not exist, create a new word_count_t object
+    }else{ //wc == NULL --- create a new word_count_t object
         wc = malloc(sizeof(word_count_t));
         if (wc == NULL) {
             perror("malloc error");
