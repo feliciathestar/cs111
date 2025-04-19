@@ -95,6 +95,72 @@ int cmd_cd (struct tokens *tokens){
     return 0;
 }
 
+bool is_full_path(char *cmd) {
+    // Check if the command starts with '/' or './' or '../'
+    if (cmd[0] == '/' || (cmd[0] == '.' && cmd[1] == '/') || (cmd[0] == '.' && cmd[1] == '.' && cmd[2] == '/')) {
+        return true;
+    }
+    return false;
+}
+
+/* Convert cmd name to its full path */
+char* get_full_path(char *cmd){
+    char *path = getenv("PATH"); // get the PATH environment variable
+    if (path == NULL) {
+        fprintf(stderr, "PATH not set\n");
+        return NULL;
+    }
+
+    char *full_path = malloc(4096); // allocate memory for full path
+    if (full_path == NULL) {
+        perror("malloc failed");
+        return NULL;
+    }
+
+    char *path_copy = strdup(path); // duplicate the PATH string
+    if (path_copy == NULL) {
+        perror("strdup failed");
+        free(full_path);
+        return NULL;
+    }
+
+    // dir stores the word before the 1st ':'
+    char *dir = strtok(path_copy, ":"); 
+    // The first call to strtok() with path_copy set up 
+    // internal state about where it left off in the string 
+    
+    while (dir != NULL) {
+        //create the full path: "dir/cmd\0"
+        char *try_path = malloc(strlen(dir) + strlen(cmd)+2);
+        if (try_path == NULL) {
+            perror("malloc failed");
+            free(full_path);
+            free(path_copy);
+            return NULL;
+        }
+
+        strcpy(try_path, dir); // copy the directory
+        strcat(try_path, "/"); // add a '/'
+        strcat(try_path, cmd); // add the command
+
+        //check if potential path is executable by the user
+        if (access(try_path, X_OK) == 0) {
+            // If the file is executable, return the full path
+            strcpy(full_path, try_path);
+            free(try_path);
+            free(path_copy);
+            return full_path;
+        }
+
+        free(try_path);
+
+        // calling strtok() again with NULL continues tokenizing from where strtok() left off
+        dir = strtok(NULL, ":"); 
+    }
+    free(path_copy);
+    return NULL;
+}
+
 /* Looks up the built-in command, if it exists return its index in cmd_table[] */
 int lookup(char *cmd) {
     if (cmd != NULL) {
@@ -153,6 +219,10 @@ int main(unused int argc, unused char *argv[]) {
     while (fgets(line, 4096, stdin)) {
         /* Split our line into words. */
         struct tokens *tokens = tokenize(line);
+        if (tokens == NULL) {
+            fprintf(stderr, "empty cmd line input");
+            exit(EXIT_FAILURE);
+        }
 
         /* Find which built-in function to run. */
         int fundex = lookup(tokens_get_token(tokens, 0)); // look for the 1st token
