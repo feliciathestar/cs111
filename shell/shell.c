@@ -172,6 +172,8 @@ bool needs_redirection (struct tokens *tokens){
     return false;
 }
 
+
+
 /* Looks up the built-in command, if it exists return its index in cmd_table[] */
 int lookup(char *cmd) {
     if (cmd != NULL) {
@@ -257,12 +259,12 @@ int main(unused int argc, unused char *argv[]) {
             }
 
             /* Redirect streams between process and file */
-            if (needs_redirection(tokens)){
+            if (needs_redirection(tokens)) {
                 int fd;
-                char *redir_token = tokens_get_token(tokens, 1); // get the redirection token
-                if (strcmp(redir_token, ">") == 0) { // std out 
+                char *redir_token = tokens_get_token(tokens, 1);
+                if (strcmp(redir_token, ">") == 0) {
                     fd = open(tokens_get_token(tokens, 2), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                } else if (strcmp(redir_token, "<") == 0) { // std in 
+                } else if (strcmp(redir_token, "<") == 0) {
                     fd = open(tokens_get_token(tokens, 2), O_RDONLY);
                 } else {
                     fprintf(stderr, "Invalid redirection operator\n");
@@ -270,49 +272,51 @@ int main(unused int argc, unused char *argv[]) {
                     tokens_destroy(tokens);
                     continue;
                 }
-                
+
                 if (fd < 0) {
                     perror("open failed");
                     free(cmd_path);
                     tokens_destroy(tokens);
                     continue;
                 }
-                // makes the STDOUT or STDIN point to the file descriptor
-                // so when the child process writes to STDOUT/IN, it writes to the indicated [file]
-                dup2(fd, strcmp(redir_token, ">") == 0 ? STDOUT_FILENO : STDIN_FILENO);
-                close(fd); // after you made STD streams point to the file, fd can be closed
 
-                // Remove the redirection tokens from the token list
-                size_t num_tokens = tokens_get_length(tokens);
-                for (size_t i = 1; i < num_tokens - 1; i++) {
-                    tokens_set_token(tokens, i, tokens_get_token(tokens, i + 2));
-                }
-                tokens_set_length(tokens, num_tokens - 2); // reduce the length of the token list
+                dup2(fd, strcmp(redir_token, ">") == 0 ? STDOUT_FILENO : STDIN_FILENO);
+                close(fd);
             }
 
-            pid_t pid = fork(); // create a new process
-            if (pid == 0){
+            pid_t pid = fork();
+            if (pid == 0) {
                 size_t num_tokens = tokens_get_length(tokens);
+                size_t argv_size = needs_redirection(tokens) ? num_tokens - 2 : num_tokens;
 
                 // Allocate ptrs to each token word
-                char **argv = malloc ((num_tokens +1) * sizeof(char *));
+                char **argv = malloc((argv_size + 1) * sizeof(char *));
                 if (!argv) {
                     perror("malloc failed");
+                    free(cmd_path);
                     exit(EXIT_FAILURE);
                 }
 
-                // Copy each token ptr into the argv array
-                for (size_t i = 0; i < num_tokens; i++) {
-                    argv[i] = tokens_get_token(tokens, i);
+                // Copy command name and arguments, skipping redirection tokens
+                argv[0] = tokens_get_token(tokens, 0);  // Command name
+                size_t argv_idx = 1;
+                
+                for (size_t i = 1; i < num_tokens; i++) {
+                    char *token = tokens_get_token(tokens, i);
+                    // Skip redirection operator and filename
+                    if (strcmp(token, ">") == 0 || strcmp(token, "<") == 0) {
+                        i++;  // Skip the next token (filename)
+                        continue;
+                    }
+                    argv[argv_idx++] = token;
                 }
-                argv[num_tokens] = NULL; // last element must be NULL
-                execv(cmd_path, argv); // execute command
+                argv[argv_size] = NULL;
 
-                perror("execv failed"); // if execv fails, print error
-                free(argv); 
-                free(cmd_path); 
+                execv(cmd_path, argv);
+                perror("execv failed");
+                free(argv);
+                free(cmd_path);
                 exit(EXIT_FAILURE);
-
             } else if (pid < 0) {
                 perror("fork failed");
                 free(cmd_path);
