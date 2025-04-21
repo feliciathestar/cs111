@@ -6,7 +6,7 @@
 
 struct tokens {
     size_t tokens_length;
-    char **tokens;
+    char **tokens; // array of strings
     size_t buffers_length;
     char **buffers;
 };
@@ -127,4 +127,21 @@ void tokens_destroy(struct tokens *tokens) {
         free(tokens->tokens);
     }
     free(tokens);
+}
+
+void tokens_set_token(struct tokens *tokens, size_t old_index, char *new_token) {
+    if (tokens == NULL || old_index >= tokens->tokens_length) {
+        return;
+    } else {
+        free(tokens->tokens[old_index]);
+        tokens->tokens[old_index] = new_token;
+    }
+}
+
+void tokens_set_length(struct tokens *tokens, size_t new_length) {
+    if (tokens == NULL) {
+        return;
+    } else {
+        tokens->tokens_length = new_length;
+    }
 }
