@@ -161,6 +161,17 @@ char* get_full_path(char *cmd){
     return NULL;
 }
 
+bool needs_redirection (struct tokens *tokens){
+    // Check if the command has a redirection operator
+    for (int i = 0; i < tokens_get_length(tokens); i++) {
+        char *token = tokens_get_token(tokens, i);
+        if (strcmp(token, ">") == 0 || strcmp(token, "<") == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* Looks up the built-in command, if it exists return its index in cmd_table[] */
 int lookup(char *cmd) {
     if (cmd != NULL) {
@@ -221,7 +232,7 @@ int main(unused int argc, unused char *argv[]) {
         struct tokens *tokens = tokenize(line);
         if (tokens == NULL) {
             fprintf(stderr, "empty cmd line input");
-            exit(EXIT_FAILURE);
+            continue;
         }
 
         /* Find which built-in function to run. */
@@ -230,6 +241,55 @@ int main(unused int argc, unused char *argv[]) {
         if (fundex >= 0) {
             cmd_table[fundex].fun(tokens);
         } else {
+            /* Resolve the command to its full path */ 
+            char *cmd = tokens_get_token(tokens, 0);
+            char *cmd_path;  // Store path separately
+            if (is_full_path(cmd)) {
+                cmd_path = strdup(cmd);
+            } else {
+                // Otherwise, get the full path using get_full_path()
+                cmd_path = get_full_path(cmd);
+                if (cmd == NULL) {
+                    fprintf(stderr, "Command not found: %s\n", tokens_get_token(tokens, 0));
+                    tokens_destroy(tokens);
+                    continue;
+                }
+            }
+
+            /* Redirect streams between process and file */
+            if (needs_redirection(tokens)){
+                int fd;
+                char *redir_token = tokens_get_token(tokens, 1); // get the redirection token
+                if (strcmp(redir_token, ">") == 0) { // std out 
+                    fd = open(tokens_get_token(tokens, 2), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                } else if (strcmp(redir_token, "<") == 0) { // std in 
+                    fd = open(tokens_get_token(tokens, 2), O_RDONLY);
+                } else {
+                    fprintf(stderr, "Invalid redirection operator\n");
+                    free(cmd_path);
+                    tokens_destroy(tokens);
+                    continue;
+                }
+                
+                if (fd < 0) {
+                    perror("open failed");
+                    free(cmd_path);
+                    tokens_destroy(tokens);
+                    continue;
+                }
+                // makes the STDOUT or STDIN point to the file descriptor
+                // so when the child process writes to STDOUT/IN, it writes to the indicated [file]
+                dup2(fd, strcmp(redir_token, ">") == 0 ? STDOUT_FILENO : STDIN_FILENO);
+                close(fd); // after you made STD streams point to the file, fd can be closed
+
+                // Remove the redirection tokens from the token list
+                size_t num_tokens = tokens_get_length(tokens);
+                for (size_t i = 1; i < num_tokens - 1; i++) {
+                    tokens_set_token(tokens, i, tokens_get_token(tokens, i + 2));
+                }
+                tokens_set_length(tokens, num_tokens - 2); // reduce the length of the token list
+            }
+
             pid_t pid = fork(); // create a new process
             if (pid == 0){
                 size_t num_tokens = tokens_get_length(tokens);
@@ -246,25 +306,24 @@ int main(unused int argc, unused char *argv[]) {
                     argv[i] = tokens_get_token(tokens, i);
                 }
                 argv[num_tokens] = NULL; // last element must be NULL
+                execv(cmd_path, argv); // execute command
 
-                // execute command using execv()
-                execv(argv[0], argv);
-
-                // If execv() fails, print error message
-                perror("execv failed");
-                free(argv); // free the allocated memory
-                exit(EXIT_FAILURE); // exit child process
+                perror("execv failed"); // if execv fails, print error
+                free(argv); 
+                free(cmd_path); 
+                exit(EXIT_FAILURE);
 
             } else if (pid < 0) {
                 perror("fork failed");
+                free(cmd_path);
                 exit(EXIT_FAILURE); // exit parent process
             } else {
                 // Parent process waits for child to finish
                 int status;
                 waitpid(pid, &status, 0);
+                free(cmd_path);
             }
         }
-        // fprintf(stdout, "This shell doesn't know how to run programs.\n");
 
         if (shell_is_interactive) {
             /* Only print shell prompts when standard input is not a tty. */
