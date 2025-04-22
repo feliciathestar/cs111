@@ -204,16 +204,32 @@ void init_shell() {
          * a SIGCONT. */
         while (tcgetpgrp(shell_terminal) != (shell_pgid = getpgrp())) {
             kill(-shell_pgid, SIGTTIN);
+            //While the shell’s process group does not own the terminal, we keep waiting
+            // if a background process group is running, we suspend it using SIGTTIN 
         }
 
-        /* Saves the shell's process id */
+        /* Ignore interactive and job-control signals*/
+        struct sigaction act; // act defines how you want the program to handle certain signals
+        memset(&act, 0, sizeof(act)); // zeros out the structure — good practice for avoiding garbage values
+        act.sa_handler = SIG_IGN; // a predefined constant meaning "ignore."
+
+        sigaction(SIGINT, &act, NULL); // Don’t kill your shell, just subprocesses.
+        sigaction(SIGQUIT, &act, NULL); // only kill subprocesses too
+        sigaction(SIGTSTP, &act, NULL); // so the shell does not pause
+        sigaction(SIGTTIN, &act, NULL); // Shell might read stdin even if it’s not foreground — don’t let it suspend.
+        sigaction(SIGTTOU, &act, NULL); // Shell might write stdout even if it’s not foreground 
+
+        /* Put ourselves in our own process group */
         shell_pgid = getpid();
+        if (setpgid(0, shell_pgid) < 0){
+            perror("Couldn't put the shell in its own process group");
+            exit(EXIT_FAILURE);
+        }
 
         /* Take control of the terminal */
         tcsetpgrp(shell_terminal, shell_pgid);
 
-        /* Save the current termios to a variable, so it can be restored later.
-         */
+        /* Save the current terminal attributes to shell_tmodes, so it can be restored later.*/
         tcgetattr(shell_terminal, &shell_tmodes);
     }
 }
@@ -286,6 +302,23 @@ int main(unused int argc, unused char *argv[]) {
 
             pid_t pid = fork();
             if (pid == 0) {
+                /* Put chile process in its own process group */
+                if (setpgid(0, 0) < 0) {
+                    perror("setpgid failed");
+                    exit(EXIT_FAILURE);
+                }
+                // If we're in interactive mode, take control of the terminal
+                if (shell_is_interactive) {
+                    tcsetpgrp(shell_terminal, getpid());
+                }
+                // set the signal handlers back to default
+                signal(SIGINT, SIG_DFL);
+                signal(SIGQUIT, SIG_DFL);
+                signal(SIGTSTP, SIG_DFL);
+                signal(SIGTTIN, SIG_DFL);
+                signal(SIGTTOU, SIG_DFL);
+
+                /* Execute command */
                 size_t num_tokens = tokens_get_length(tokens);
                 size_t argv_size = needs_redirection(tokens) ? num_tokens - 2 : num_tokens;
 
@@ -321,11 +354,32 @@ int main(unused int argc, unused char *argv[]) {
                 perror("fork failed");
                 free(cmd_path);
                 exit(EXIT_FAILURE); // exit parent process
-            } else {
-                // Parent process waits for child to finish
+            } else { // Parent process
+                // Put child in its own process group
+                if (setpgid(pid, pid) < 0) {
+                    // Ignore race condition errors (EACCES occurs when the child is already running smth)
+                    if (errno != EACCES) { 
+                        perror("setpgid failed");
+                    }
+                }
+                
+                // If in interactive mode, give terminal control to child
+                if (shell_is_interactive) {
+                    tcsetpgrp(shell_terminal, pid);
+                }
+
                 int status;
-                waitpid(pid, &status, 0);
+                waitpid(pid, &status, 0); // child should be done after this
                 free(cmd_path);
+
+                /* Set the terminal back to the shell's process group */
+                if (shell_is_interactive) {
+                    // When child is done, take back terminal control
+                    tcsetpgrp(shell_terminal, shell_pgid);
+                    
+                    // Restore the shell's terminal modes
+                    tcsetattr(shell_terminal, TCSADRAIN, &shell_tmodes);
+                }
             }
         }
 
